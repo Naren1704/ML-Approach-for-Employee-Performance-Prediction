@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Results - Productivity Predictor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='submit.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="results-wrapper">
+            <!-- Header -->
+            <div class="results-header">
+                <h1>Productivity Analysis Results</h1>
+                <p>Detailed breakdown of your production prediction</p>
+            </div>
+
+            <!-- Main Results Card -->
+            <div class="results-card">
+                <div class="prediction-main">
+                    <div class="productivity-score">
+                        <div class="score-circle">
+                            <svg class="progress-ring" width="120" height="120">
+                                <circle class="progress-ring-background" cx="60" cy="60" r="54" stroke="#e1e5e9" stroke-width="8" fill="none"/>
+                                <circle class="progress-ring-circle" cx="60" cy="60" r="54" stroke="url(#gradient)" stroke-width="8" fill="none" 
+                                        stroke-dasharray="339.292" stroke-dashoffset="339.292" transform="rotate(-90 60 60)"/>
+                                <defs>
+                                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#4f46e5" />
+                                        <stop offset="100%" stop-color="#7c3aed" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <div class="score-text">
+                                <span class="score-value" id="scoreValue">0.00</span>
+                                <span class="score-label">Productivity Score</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="classification">
+                        <h3>Performance Classification</h3>
+                        <div class="class-badge" id="classBadge">
+                            <span class="class-text">Analyzing...</span>
+                        </div>
+                        <div class="class-description" id="classDescription">
+                            Calculating performance insights...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Section -->
+            <div class="visualization-section">
+                <h2>Performance Analytics</h2>
+                
+                <div class="charts-grid">
+                    <!-- Productivity Distribution -->
+                    <div class="chart-card">
+                        <h4>Productivity Distribution</h4>
+                        <div class="chart-container">
+                            <canvas id="distributionChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Factor Impact -->
+                    <div class="chart-card">
+                        <h4>Key Factor Impact</h4>
+                        <div class="chart-container">
+                            <canvas id="impactChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Historical Trend -->
+                    <div class="chart-card">
+                        <h4>Performance Trend</h4>
+                        <div class="chart-container">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recommendations -->
+                    <div class="chart-card recommendations">
+                        <h4>Optimization Recommendations</h4>
+                        <div class="recommendations-list" id="recommendationsList">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Summary -->
+            <div class="input-summary">
+                <h3>Input Summary</h3>
+                <div class="summary-grid" id="inputSummary">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <a href="/predict" class="btn-primary">
+                    🔄 Predict Another
+                </a>
+                <button class="btn-secondary" onclick="window.print()">
+                    📄 Print Report
+                </button>
+                <a href="/" class="btn-tertiary">
+                    🏠 Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get prediction results from session storage
+        const predictionResult = JSON.parse(sessionStorage.getItem('predictionResult'));
+        
+        if (!predictionResult || !predictionResult.success) {
+            window.location.href = '/predict';
+        }
+
+        const { prediction, class: productivityClass, class_color, input_data } = predictionResult;
+
+        // Update main results
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeResults();
+            createCharts();
+            updateInputSummary();
+            generateRecommendations();
+        });
+
+        function initializeResults() {
+            // Update score with animation
+            const scoreValue = document.getElementById('scoreValue');
+            const progressRing = document.querySelector('.progress-ring-circle');
+            const classBadge = document.getElementById('classBadge');
+            const classDescription = document.getElementById('classDescription');
+            
+            // Animate score counter
+            animateValue(scoreValue, 0, prediction, 2000);
+            
+            // Animate progress ring
+            const circumference = 2 * Math.PI * 54;
+            const offset = circumference - (prediction * circumference);
+            
+            setTimeout(() => {
+                progressRing.style.strokeDashoffset = offset;
+            }, 500);
+            
+            // Update classification
+            classBadge.innerHTML = `<span class="class-text">${productivityClass} Performance</span>`;
+            classBadge.style.backgroundColor = class_color;
+            
+            // Update description
+            const descriptions = {
+                "Worst": "Below expected performance. Consider reviewing operational processes and team allocation.",
+                "Average": "Meeting baseline expectations. There's potential for optimization and improvement.",
+                "Best": "Excellent performance! Exceeding targets with efficient resource utilization."
+            };
+            classDescription.textContent = descriptions[productivityClass] || 'Performance analysis complete.';
+        }
+
+        function animateValue(element, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const value = start + progress * (end - start);
+                element.textContent = value.toFixed(3);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        function createCharts() {
+            // Productivity Distribution Chart
+            const distCtx = document.getElementById('distributionChart').getContext('2d');
+            new Chart(distCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Worst (<0.6)', 'Average (0.6-0.8)', 'Best (>0.8)'],
+                    datasets: [{
+                        data: [25, 50, 25],
+                        backgroundColor: ['#ff4444', '#ffaa00', '#44ff44'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#333', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+
+            // Factor Impact Chart
+            const impactCtx = document.getElementById('impactChart').getContext('2d');
+            new Chart(impactCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Incentive', 'Overtime', 'Team Size', 'SMV', 'Target'],
+                    datasets: [{
+                        label: 'Impact Score',
+                        data: [85, 72, 68, 61, 55],
+                        backgroundColor: '#4f46e5',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { 
+                            max: 100,
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        },
+                        y: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+
+            // Trend Chart
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Current'],
+                    datasets: [{
+                        label: 'Productivity Trend',
+                        data: [0.65, 0.72, 0.68, 0.71, prediction],
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            min: 0.4,
+                            max: 1.0,
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateInputSummary() {
+            const summaryGrid = document.getElementById('inputSummary');
+            const fields = [
+                { label: 'Department', value: input_data.department },
+                { label: 'Team', value: input_data.team },
+                { label: 'Day', value: input_data.day },
+                { label: 'Target Productivity', value: input_data.targeted_productivity },
+                { label: 'SMV', value: input_data.smv },
+                { label: 'Overtime', value: input_data.over_time + ' min' },
+                { label: 'Incentive', value: input_data.incentive },
+                { label: 'Workers', value: input_data.no_of_workers }
+            ];
+
+            summaryGrid.innerHTML = fields.map(field => `
+                <div class="summary-item">
+                    <span class="summary-label">${field.label}:</span>
+                    <span class="summary-value">${field.value}</span>
+                </div>
+            `).join('');
+        }
+
+        function generateRecommendations() {
+            const recommendationsList = document.getElementById('recommendationsList');
+            const recommendations = [];
+            
+            if (prediction < 0.6) {
+                recommendations.push(
+                    'Increase incentive amounts to boost motivation',
+                    'Review and optimize Standard Minute Values',
+                    'Reduce style changes to improve workflow consistency',
+                    'Consider team restructuring for better efficiency'
+                );
+            } else if (prediction < 0.8) {
+                recommendations.push(
+                    'Maintain current incentive structure',
+                    'Monitor overtime levels for optimal balance',
+                    'Focus on reducing idle time between tasks',
+                    'Implement minor process improvements'
+                );
+            } else {
+                recommendations.push(
+                    'Continue current successful strategies',
+                    'Document best practices for team training',
+                    'Consider setting more ambitious targets',
+                    'Share successful approaches across departments'
+                );
+            }
+
+            // Add SMV-specific recommendation
+            if (input_data.smv > 30) {
+                recommendations.push('High SMV detected - review process complexity');
+            }
+
+            recommendationsList.innerHTML = recommendations.map(rec => 
+                `<div class="recommendation-item">✓ ${rec}</div>`
+            ).join('');
+        }
+    </script>
+</body>
+</html>
